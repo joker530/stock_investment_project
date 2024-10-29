@@ -1,0 +1,165 @@
+这是聚宽的一个回测框架的演示示范
+
+一、基础架构
+伪代码如下：
+回测函数：
+    初始化函数
+    创建一个全局的股票账号对象，用于存储交易中产生的信息
+    for i in 每个交易节点：
+        进行数据处理
+        进行交易过程
+        交易结束后计算结果
+        做好处理进行下一个循环周期
+        根据账户信息进行统计和绘图，计算相关参数，并生成GUI界面进行可视化处理
+    策略评价和分析
+
+二、架构详细说明和解释
+主要架构的设计包含下面这几个方面
+1、初始化函数的设计，包含设置运行参数的函数（运行模式，扫描频次等等）；设置交易参数的函数（手续费等等）
+2、创建一个Context函数对象，包含交易对象、交易函数、交易信息处理和存储
+3、数据处理方面需要从数据获取函数获得数据后对数据分析后进行排序，根据目前账户的状态进行买入或卖出操作
+4、买入和卖出的操作都应该在算上交易成本后遵循一套相同的逻辑，不存在因为买入了而改变买入股票的权值的现象
+5、当所有的available_cash都已经耗尽后就应该立刻停止计算和交易进入下一个交易日
+6、GUI实时展示交易的结果，并可以在界面上进行终止操作
+7、策略评价可以从超额收益和夏普比率进行评价，超额收益越高越好，夏普比率越高越好，策略的通用性越高越好，策略能交易的股票池越高越好，相同条件下策略的年交易频率越高越好。
+8、单次回测可能无法准确的反应策略有效性和真实性，需要多次测试（可以设置不同的时间跨度）取均值才能保障实验的结果
+
+
+三、关于策略参数的优化架构
+在回测架构得到比较良好的结果后，可以对其进行因子成分分析，看下到底是哪种因子对决策起到比较重要的作用。
+优化参数需要调整参数并进行大量的重复性计算，有些甚至需要用到神经网络结构来进行拟合分析，所以必要时需要借助云的计算资源协助计算。
+
+四、架构参考案例（以聚宽上的代码进行参考）
+# 导入函数库
+from jqdata import *
+# 首先导入线性回归模型
+from sklearn.linear_model import LinearRegression
+# 导入岭回归模型
+from sklearn.linear_model import Ridge
+import numpy as np
+import pandas as pd
+
+
+# 初始化函数，设定基准等等
+def initialize(context):
+    # 包含相关参数设置的函数
+    set_params()
+    # 设置回测环境的函数
+    set_backtest()
+    # 设置每天运行交易
+    run_daily(trade, 'every_bar')
+
+
+## 定义参数设置函数
+def set_params():
+    # 定义初始日期为0（g.为全局变量）
+    g.days = 0
+    # 每5天调仓一次
+    g.refresh_rate = 5
+    # 最大持股数
+    g.stocknum = 10
+
+
+# 定义回测函数
+def set_backtest():
+    # 设定上证指数作为基准
+    set_benchmark('000001.XSHG')
+    # 开启动态复权模式(真实价格)
+    set_option('use_real_price', True)
+    # 输出日志记录订单和报错
+    log.set_level('order', 'error')
+
+
+## 交易函数
+def trade(context):
+    # 如果天数能够被5整除
+    if g.days % 5 == 0:
+        # 上证50成分股作为股票池
+        stocks = get_index_stocks('000016.XSHG', date=None)
+        q = query(valuation.code,
+                  # 市值
+                  valuation.market_cap,
+                  # 净资产：总资产 - 总负债
+                  balance.total_assets - balance.total_liability,
+                  #一个资产负债率的倒数
+                  balance.total_assets / balance.total_liability,
+                  # 净利润
+                  income.net_profit,
+                  # 年度收入增长
+                  indicator.inc_revenue_year_on_year,
+                  # 研发费用
+                  balance.development_expenditure
+                 ).filter(valuation.code.in_(stocks))
+
+        df = get_fundamentals(q, date=None)
+        df.columns = ['code',
+                      'mcap',
+                      'na',
+                      '1/DA_ratio',
+                      'net_income',
+                      'growth',
+                      'RD'
+                     ]
+        # 把股票代码作为数据表的index
+        df.index = df.code.values
+        # 删除原来代码这一列，防止它参与计算
+        df = df.drop('code', axis=1)
+        df = df.fillna(0)
+        # 除市值之外的数据作为特征，赋值给X
+        X = df.drop('mcap', axis=1)
+        # 市值作为目标值，赋值给y
+        y = df['mcap']
+        # 用0填充空值
+        X = X.fillna(0)
+        y = y.fillna(0)
+
+        # 下面是机器学习部分
+        # 使用线性回归来拟合数据
+        reg = LinearRegression()
+        model = reg.fit(X,y)
+        # 将模型预测值存入数据表
+        predict = pd.DataFrame(reg.predict(X),
+                               # 保持和y相同的index
+                               index=y.index,
+                               # 设置一个列名
+                               columns=['predict_mcap'])
+        # 使用真实的市值，减去模型预测的市值
+        diff = df['mcap'] - predict['predict_mcap']
+        # 将两者的差存入一个数据表，index用股票代码
+        diff = pd.DataFrame(diff, index=y.index, columns=['diff'])
+        # 排序
+        diff = diff.sort_values(by='diff', ascending=True)
+
+        #下面是执行订单部分
+        # 首先把市值被低估10只股票存入持仓列表
+        stockset = list(diff.index[:10])
+        # 同时已经持有的股票，存入卖出列表
+        sell_list = list(context.portfolio.positions.keys())
+        # 如果股票在卖出列表中
+        for stock in sell_list:
+            # 同时又不在持仓列表中
+            if stock not in stockset[:g.stocknum]:
+                # 就把股票卖出
+                stock_sell = stock
+                order_target_value(stock_sell, 0)
+        # 如果持仓数量小于我们设置的最大持仓数
+        if len(context.portfolio.positions) < g.stocknum:
+            # 就把剩余现金，平均买入股票
+            num = g.stocknum - len(context.portfolio.positions)
+            cash = context.portfolio.cash / num
+        else:
+            cash = 0
+            num = 0
+        for stock in stockset[:g.stocknum]:
+            if stock in sell_list:
+                pass
+            else:
+                stock_buy = stock
+                order_target_value(stock_buy, cash)
+                num -= 1
+                if num == 0:
+                    break
+        g.days += 1
+
+    else:
+        g.days += 1
