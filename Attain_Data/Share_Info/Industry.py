@@ -6,7 +6,7 @@ Created on Mon May  1 11:08:44 2023
 """
 # %%
 import sys
-sys.path.append('D:/量化投资/交易框架的编写/backtesting_platform/Data_Table/Industry_Datas')
+sys.path.append('/Datasets/Data_Table/Industry_Datas')
 import akshare as ak
 import pandas as pd
 import os
@@ -19,7 +19,8 @@ class Industry():
         pass
     def get_industry_sectors(self):
         try:
-            file_path = os.path.join(os.getcwd(), "D:/量化投资/交易框架的编写/backtesting_platform/Data_Table/Industry_Datas/Industry_Sectors/industry_sectors.csv")
+            file_path = os.path.join(os.getcwd(),
+                                     "/Datasets/Data_Table/Industry_Datas/Industry_Sectors/industry_sectors.csv")
             with open(file_path, 'rb') as f:
                 content = f.read()
                 encoding = chardet.detect(content)['encoding']

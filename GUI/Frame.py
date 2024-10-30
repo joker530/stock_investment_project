@@ -123,16 +123,13 @@ class BacktestFrame(wx.Frame):
         self.fig, self.ax = plt.subplots(figsize=(4, 3))
         self.font = FontProperties(family='SimHei', style='italic', weight='bold')
 
-        # 设置字体
-        self.canvas = FigureCanvas(self.backtest_chart, -1, self.fig)
+        # 将图像嵌入到 wx.Panel 中
+        self.canvas = FigureCanvas(self.backtest_chart, -1, self.fig)   # 当fig数据集变化后，用self.canvas.draw()重新绘制
 
         # 使用 sizer 管理布局
         chart_sizer = wx.BoxSizer(wx.VERTICAL)
         chart_sizer.Add(self.canvas, 1, wx.EXPAND)
         self.backtest_chart.SetSizer(chart_sizer)
-
-        # 将图像嵌入到 wx.Panel 中
-        # self.canvas = FigureCanvas(self.backtest_chart, -1, fig)   # 当fig数据集变化后，用self.canvas.draw()重新绘制
 
         # 第四行：日志显示和错误提示
         self.log_display = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_RICH2 | wx.TE_BESTWRAP, size=(600, 50))
@@ -147,9 +144,9 @@ class BacktestFrame(wx.Frame):
         self.SetTitle('量化回测平台')
         self.Centre()
         # 开始调用方法绘图
-        self.draw_initial_plot()
+        self._draw_initial_plot()
 
-    def draw_initial_plot(self):
+    def _draw_initial_plot(self):
         x = np.linspace(-5, 5, 100)
         y = 3 * np.sin(x)
 
@@ -218,6 +215,7 @@ class BacktestFrame(wx.Frame):
         # 将格式化后的字符串设置到 TextCtrl 中
         strategy_name = self.strategy.GetValue()  # 以字符串的形式输出选择的交易策略的名称
         module = dynamic_import(strategy_name)
+        print(dir(module))
         self.module = module
         strategy = Strategy(name=strategy_name, initialize=module.initialize, handle_data=module.handle_data,
                             before_trading_start=module.before_trading_start,
@@ -264,7 +262,7 @@ class BacktestFrame(wx.Frame):
         max_drowdown = self.context.recommand_index.calculate_max_drawdown()
         self.max_drawdown.SetValue(str(max_drowdown*100)+'%')
 
-    def execute(self, event):  # 定义当点击开始回测按钮后的执行函数
+    def execute(self, event):  # 定义当点击开始回测按钮后的 执行函数
         print('回测已启动')
         start_date, end_date = self._get_dates()  # 用自己定义的函数获得text控件里面的日期，日期为字符串
         self.ax.autoscale(enable=True, axis='y', tight=False)  # 设置y轴坐标范围为自动适应

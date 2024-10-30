@@ -1,6 +1,6 @@
 # 这个函数用于设置回测或者模拟框架的滑点,这个用于子账户层面
 import sys
-sys.path.append('D:/量化投资/交易框架的编写/backtesting_platform')
+sys.path.append('/')
 from Trade_System.Class_Base.Slippage import *
 __all__=["set_slippage"]
 '''  固定滑点设置有如下三类

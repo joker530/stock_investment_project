@@ -4,12 +4,17 @@ Created on Fri Apr 21 15:25:01 2023
 
 @author: Administrator
 """
+# 下载talib请到https://github.com/cgohlke/talib-build/releases
 import matplotlib.pyplot as plt
 import pandas as pd
-import os
 import talib
 import mplfinance as mpf
 import numpy as np
+
+import sys
+import os
+Base_dir = os.path.dirname(os.path.dirname(os.path.realpath(sys.argv[0])))
+sys.path.append(Base_dir)
 
 # %%
 __all__ = ["stock_plot"]
