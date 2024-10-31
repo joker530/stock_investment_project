@@ -1,6 +1,9 @@
 import sys
+import os
 
-sys.path.append('D:/量化投资/交易框架的编写/backtesting_platform')
+Base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(Base_dir)
+
 from Attain_Data.Share_Info import *  # 导入数据获取方法
 from Trade_System.Class_Base import *  # 导入交易相关的类
 import datetime

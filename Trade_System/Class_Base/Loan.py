@@ -8,7 +8,7 @@ Created on Sat May  6 19:18:48 2023
 import os
 import sys
 
-Base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(sys.argv[0]))))
+Base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(Base_dir)
 
 __all__ = ["Loan"]

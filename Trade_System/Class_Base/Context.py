@@ -3,15 +3,16 @@
 from datetime import datetime
 import dateutil
 import pandas as pd
+
 import sys
 import os
 
-Base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(sys.argv[0]))))
-##
+Base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(Base_dir)
-
+##
 from Trade_System.Class_Base.Portfolio import *  # 导入总账户类
 from Trade_System.Class_Base.RecommandIndex import *  # 导入策略评价类
+from Trade_System.Class_Base.Pickle import *  # 导入压缩方法
 
 ##
 __all__ = ["Context"]
@@ -71,6 +72,10 @@ class Context:
         years_span = self.calculate_years_between_dates()
         self.recommand_index = RecommendIndex(strategy_returns=self.returns, benchmark_returns=self.benchmark_returns,
                                               time_span=years_span)
+
+    def save(self):  # 策略对象的保存函数
+        filename = 'Compressed_Context/' + 'Context'
+        dump_class(filename, self)
 
     def __repr__(self):
         return f"Context(cash='{self.cash}', start_date='{self.start_date}', end_date='{self.end_date}', type='{self.type}', freq='{self.freq}', positions={self.positions}, benchmark={self.benchmark}, universe={self.universe})"

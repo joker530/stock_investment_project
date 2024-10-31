@@ -1,6 +1,5 @@
 ##
 import datetime
-import time
 
 import wx
 import matplotlib.pyplot as plt
@@ -8,12 +7,15 @@ from matplotlib.backends.backend_wxagg import FigureCanvasWxAgg as FigureCanvas
 import numpy as np
 from pylab import mpl
 from matplotlib.font_manager import FontProperties
-import sys
 import multiprocessing as mp  # 用这个模块处理多进程问题
 
-sys.path.append('D:/量化投资/交易框架的编写/backtesting_platform')
-sys.path.append('D:/量化投资/交易框架的编写/backtesting_platform'
-                '/Strategy_Functions/ExecutiveBase/Stock_Executive')  # 用于导入具体策略的存放路径
+import sys
+import os
+
+Base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(Base_dir)
+
+sys.path.append(Base_dir + '/Strategy_Functions')  # 用于导入具体策略的存放路径
 from Trade_System.Class_Base.Strategy import *  # 导入策略类用于生成策略对象
 import importlib
 import threading  # 用这个模块创建线程
@@ -215,7 +217,6 @@ class BacktestFrame(wx.Frame):
         # 将格式化后的字符串设置到 TextCtrl 中
         strategy_name = self.strategy.GetValue()  # 以字符串的形式输出选择的交易策略的名称
         module = dynamic_import(strategy_name)
-        print(dir(module))
         self.module = module
         strategy = Strategy(name=strategy_name, initialize=module.initialize, handle_data=module.handle_data,
                             before_trading_start=module.before_trading_start,

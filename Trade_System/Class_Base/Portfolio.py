@@ -8,7 +8,7 @@ Created on Sun Apr  9 11:06:20 2023
 # %%
 import sys
 import os
-Base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(sys.argv[0]))))
+Base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(Base_dir)
 
 ##
