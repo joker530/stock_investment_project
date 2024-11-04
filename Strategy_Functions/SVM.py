@@ -18,9 +18,6 @@ __all__ = ['initialize', 'handle_data', 'on_event', 'before_trading_start', 'aft
 
 ##
 def initialize(context: Context):  # 初始化函数
-    cash = context.cash
-    context.portfolio.create_new_SubPortfolio(inout_cash=cash, margin=1, type='stock', name="我的股票账户1")  # 创建一个子账户
-
     pass
 
 
@@ -58,10 +55,9 @@ def unschedule_all(context: Context):  # 取消所有定时运行，主要用于
     pass
 
 
-def serialize_g(context, g):  # 发生中断时保存这两个全局变量
+def serialize_g(context, g):  # 发生中断时保存这个上下文全局变量
     dump_class('Context', context)
-    dump_class('g', g)
-    print("Serialized global data successfully.")
+    print("Serialized global data 'Context' successfully.")
 
 
 def signal_handler(sig, frame, context, g):

@@ -7,11 +7,9 @@ Base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(Base_dir)
 
 from datetime import datetime
-import dateutil
-import time
 
 __all__ = ["long_to_short_datestr", "short_to_long_datestr", "dd_to_short_datestr", "dd_to_long_datestr",
-           "get_date_range_ndarray", "short_datestr_to_dd", "long_datestr_to_dd"]
+           "get_date_range_list", "short_datestr_to_dd", "long_datestr_to_dd"]
 
 
 ## 第一种，带横杠的字符串日期向不带横杆的字符串日期转换
@@ -51,7 +49,7 @@ def long_datestr_to_dd(s: str):
 
 
 ## 根据时间范围筛查csv数据表的日期，并返回一个'numpy.ndarray'数组对象
-def get_date_range_ndarray(trade_cal_csv, start_date, end_date):
+def get_date_range_list(trade_cal_csv, start_date, end_date):
     date_range = trade_cal_csv[(trade_cal_csv['trade_date'] >= str(start_date)) &
                                (trade_cal_csv['trade_date'] <= str(end_date))]['trade_date'].values
     # 将一个'numpy.ndarray'对象，转换为list对象

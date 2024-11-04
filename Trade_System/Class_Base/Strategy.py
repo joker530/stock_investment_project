@@ -1,7 +1,7 @@
 import time
 from datetime import datetime
 from multiprocessing import Queue
-import akshare as ak
+import numpy as np
 
 import sys
 import os
@@ -9,8 +9,9 @@ import os
 Base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(Base_dir)
 
-from utils.file_handing import *
 from Trade_System.Class_Base.Context import *
+from utils.file_handing import *
+from utils.date_handing import *
 
 __all__ = ['Strategy']
 
@@ -34,44 +35,50 @@ class Strategy:
         self.process_initialize = process_initialize
         self.after_code_change = after_code_change
         self.unschedule_all = unschedule_all
+        self.master = None
 
-    def _get_benchmark_returns(self, context:Context):  # 用这个函数专门得到基准在回测区间的日收益率序列
-        start_date = context.date_range[0].replace('-', '')
-        end_date = context.date_range[-1].replace('-', '')
-        benchmark_code = context.benchmark.split()[1]  # 获取基准的代码，如"sh000300"
-        stock_zh_index_daily_em_df = ak.stock_zh_index_daily_em(symbol=benchmark_code, start_date=start_date,
-                                                                end_date=end_date)  # 每次调用API只获取一天的数据
-        close_list = stock_zh_index_daily_em_df['close']  # 获取表中的收盘价
-        pass
+    def _beginning_of_trading_date(self, date):     # 需要在每个交易日执行之前调用一次，更新一下上下文的数据
+        self.master.dt = long_datestr_to_dd(str(date))    # datetime.datetime这种格式，在回测框架的层面上进行递增,代表交易进行到的时间
+        self.master.portfolio.update_date_info(date=date)
+
+    def _ending_of_trading_date(self):
+        # 需要在每个交易日结束并进行结算前调用一次
+        self.master.portfolio.update_price_info()
+
+    def _data_interaction_processing(self, update_queue: Queue, date: str):
+        # 使用这个函数在每个交易日结束后进行必要的数据交互处理
+
+        # 这里操作策略
+        day_return = self.master.portfolio.returns  # 用这个计算目前的日收益率
+        self.master.returns.append(day_return)
+        new_seq = [x + 1 for x in self.master.returns]
+        new_return = np.prod(new_seq)  # 每天获取当前回测下的总收益率
+
+        # 这里操作基准
+        new_benchmark_return = ((self.master.benchmark_dict[date] - self.master.benchmark_dict[self.master.date_range[0]])
+                                / self.master.benchmark_dict[self.master.date_range[0]]) + 1
+        self.master.benchmark_returns.append(new_benchmark_return)
+
+        # 将新元素放入队列，这里放入的是收益率，还要再放入一个日期的,一次只放入一个
+        update_queue.put((date, new_return, new_benchmark_return))
 
     def execute(self, context: Context, update_queue: Queue):  # 策略的执行函数, 这个队列用于进程中的通信
-        self.initialize(context)  # 在这里对一些参数进行设置
-        last_return = 0  # 用这个变量记录前一个交易日回测下的历史收益率
-        # 这里在开始回测之前，直接获取benchmark在start_date到end_date的数据
-        for date in context.date_range:
-            context.dt = datetime.strptime(date, '%Y-%m-%d').date()  # 每次变化时间，最后的格式类似datetime.date(1990, 1, 1)
-            context.beginning_of_trading_date(date)  # 更新这个对象内部的当前时间
-            # context.portfolio.current_trade_date = context.dt   #  这里要修改
-            self.before_trading_start(context)   # 注意这里必须只有一个context参数，其他的有也给我挤到context对象中
-            self.handle_data(context)
-            self.after_trading_end(context)
-            # 这里还需要有一个获取当天的收盘价，更新仓位和账户价值信息的一个操作。
-            # 这里操作策略
-            new_return = context.portfolio.returns  # 每天获取当前回测下的历史收益率
-            day_return = (new_return - last_return) / (last_return + 1 + 1e-9)  # 用这个计算当日收益率
-            context.returns.append(day_return)
+        self.master = context
+        self.initialize(self.master)
+        # 在这里对一些参数进行设置
 
-            # 这里操作基准
-            benchmark_code = context.benchmark.split()[1]  # 获取基准的代码，如"sh000300"
-            date_space = date.replace('-', '')  # 对字符串进行一次变换
-            stock_zh_index_daily_em_df = ak.stock_zh_index_daily_em(symbol=benchmark_code, start_date=date_space,
-                                                                    end_date=date_space)  # 每次调用API只获取一天的数据
+        for date in self.master.date_range:
 
-            update_queue.put((date, new_return))  # 将新元素放入队列，这里放入的是收益率，还要再放入一个日期的,一次只放入一个
-            last_return = new_return
-            # print(update_queue.qsize())
+            self.before_trading_start(self.master)       # 注意这里必须只有一个context参数，其他的有也给我挤到context对象中
+            self._beginning_of_trading_date(date)  # 更新这个对象内部的当前时间
+            self.handle_data(self.master)
+            self._ending_of_trading_date()         # 获取所有仓位当天的收盘价，更新仓位和账户价值信息的一个操作。
+            self.after_trading_end(self.master)
+
+            self._data_interaction_processing(update_queue=update_queue, date=date)
             time.sleep(0.1)
-        self.on_strategy_end(context)
+
+        self.on_strategy_end(self.master)
         time.sleep(0.5)
 
     def save(self):  # 策略对象的保存函数

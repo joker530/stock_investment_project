@@ -23,26 +23,23 @@ class RecommendIndex:
         # 加上1得到新序列
         new_seq = [x + 1 for x in seq]
         # 计算新序列中所有元素的乘积
-        result = np.prod(new_seq)
+        result = np.prod(new_seq) - 1
         return result
 
     def calculate_strategy_returns(self):
         # 计算策略年收益的方法
         strategy_returns_per_year = self._product_of_sequence(self.strategy_returns) / self.time_span
         return strategy_returns_per_year
-        pass
 
     def calculate_benchmark_returns(self):
         # 计算基准收益的方法
         benchmark_returns_per_year = self._product_of_sequence(self.benchmark_returns) / self.time_span
         return benchmark_returns_per_year
-        pass
 
     def calculate_alpha(self):
         # 计算Alpha的方法,也就是策略相较于基准的超额收益率,计算alpha有多种方法，还有拟合的方法，这只是比较基础的方法
-        alpha = self.calculate_strategy_returns() - self.calculate_benchmark_returns()
+        alpha = self.calculate_strategy_returns() - 0.05
         return alpha
-        pass
 
     def calculate_beta(self):
         # 计算Beta的方法,也就是输入策略和基准的回报率序列（日回报率序列），然后计算二者序列的协方差除基准收益的方差的商
@@ -50,7 +47,6 @@ class RecommendIndex:
         benchmark_variance = np.var(self.benchmark_returns)
         beta = covariance / benchmark_variance
         return beta
-        pass
 
     def calculate_sharpe_ratio(self, risk_free_rate=0.05):
         # 计算夏普比率的方法,夏普比率=（策略的年化收益率-基准无风险收益率）/年化波动率,目前的基准无风险收益率以美债为标，暂定年化5%左右
@@ -58,7 +54,6 @@ class RecommendIndex:
         sharpe = ((self.calculate_strategy_returns() - risk_free_rate) /
                   np.sqrt(np.var(self.strategy_returns) * trading_days))
         return sharpe
-        pass
 
     def calculate_max_drawdown(self):
         # 将收益率转换为累计收益率

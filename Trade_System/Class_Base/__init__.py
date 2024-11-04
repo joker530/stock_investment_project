@@ -12,7 +12,6 @@ sys.path.append(current_directory)  # 将当前文件夹添加到搜索路径
 
 from Context import *
 from Event import *
-from G import *
 from Order import *
 from Portfolio import *
 from Position import *

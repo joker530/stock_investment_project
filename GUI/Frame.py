@@ -16,6 +16,7 @@ Base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(Base_dir)
 
 sys.path.append(Base_dir + '/Strategy_Functions')  # 用于导入具体策略的存放路径
+
 from Trade_System.Class_Base.Strategy import *  # 导入策略类用于生成策略对象
 import importlib
 import threading  # 用这个模块创建线程
@@ -69,7 +70,7 @@ class BacktestFrame(wx.Frame):
         hbox1.Add(wx.StaticText(panel, label="￥"), flag=wx.RIGHT, border=5)
         hbox1.Add(self.amount, flag=wx.RIGHT, border=5)
 
-        self.frequency = wx.ComboBox(panel, value="day", choices=["daily", "weekly", "monthly"])
+        self.frequency = wx.ComboBox(panel, value="daily", choices=["daily", "weekly", "monthly"])
         hbox1.Add(wx.StaticText(panel, label="频率"), flag=wx.RIGHT, border=5)
         hbox1.Add(self.frequency, flag=wx.RIGHT, border=5)
 
@@ -155,7 +156,9 @@ class BacktestFrame(wx.Frame):
         y = 3 * np.sin(x)
 
         # 更新线对象的数据
-        self.line, = self.ax.plot(x, y)
+        self.line, = self.ax.plot(x, y, label="Mainline")
+        self.benchmark_line, = self.ax.plot([], [], label='Benchmark')  # 初始化基准线
+        self.ax.legend()
         self.ax.set_title('更新后的函数图像')
         self.ax.set_title('回测图像', fontproperties=self.font)
         self.ax.set_xlabel('X轴', fontproperties=self.font)
@@ -166,26 +169,35 @@ class BacktestFrame(wx.Frame):
     def on_update_data(self, update_queue, end_event):
         plt.ion()  # 打开交互模式
         returns = list()
+        benchmark_returns = list()
         dates = list()
         returns_len = 0  # 初始设置收益率的长度是0
         is_plot = True  # 当这个变量为False的时候才能触发绘图
         while not end_event.is_set():
             if not update_queue.empty():
-                date, rt = update_queue.get()  # 这个不是pop，队列中的元素也会被取出,对获取的二元元组进行解包处理
+                date, rt, brt = update_queue.get()  # 这个不是pop，队列中的元素也会被取出,对获取的二元元组进行解包处理
                 dates.append(date)
                 returns.append(rt)
+                # print(returns)
+                benchmark_returns.append(brt)
                 returns_len = len(returns)
                 is_plot = False
-            elif (returns_len > 0) & (is_plot == False):  # 如果收益率的长度大于0同时标记为False才绘出
-                wx.CallAfter(self._update_plot, (dates, returns,))  # 输入的参数是作为一个元组进行输入的
+            elif (returns_len > 0) & (is_plot is False):  # 如果收益率的长度大于0同时标记为False才绘出
+                wx.CallAfter(self._update_plot, (dates, returns, benchmark_returns))  # 输入的参数是作为一个元组进行输入的
                 is_plot = True
             else:
                 pass
 
     def _update_plot(self, dates_returns_tuple):
-        dates, returns = dates_returns_tuple
+        dates, returns, benchmark_returns = dates_returns_tuple
+        # 更新主线数据
         self.line.set_xdata(dates)  # 带self都可以理解对GUI界面的更新，需要用wx.CallAfter将其放到主线程中执行，如果更新时间过长还是会阻滞主线程
         self.line.set_ydata(returns)
+
+        # 更新基准线数据
+        self.benchmark_line.set_xdata(dates)
+        self.benchmark_line.set_ydata(benchmark_returns)
+
         self.ax.relim()  # 重新计算数据范围
         self.ax.autoscale(enable=True, axis='y', tight=False)  # 只自动缩放 y 轴
         self.canvas.draw()
@@ -229,11 +241,11 @@ class BacktestFrame(wx.Frame):
 
     def _get_benchmark(self):  # 返回选择的参考基准，类似于"沪深300 000300"
         benchmark_name = self.benchmark.GetValue()[-6:]  # 只获取后六位代码
-        return benchmark_name
+        return {benchmark_name: 1.0}
 
-    def _check_process(self, strategy_process, end_event):  # 用这个函数每隔一段时间检查进程是否执行完毕
-        if strategy_process.is_alive():
-            wx.CallLater(100, self._check_process, strategy_process, end_event)
+    def _check_process(self, strategy_thread, end_event):  # 用这个函数每隔一段时间检查进程是否执行完毕
+        if strategy_thread.is_alive():
+            wx.CallLater(100, self._check_process, strategy_thread, end_event)
         else:
             end_event.set()
             # 这里还要触发回撤策略评价显示,把它放到主线程中执行
@@ -241,28 +253,35 @@ class BacktestFrame(wx.Frame):
             wx.MessageBox('回测已结束', '提示', wx.OK | wx.ICON_INFORMATION)  # 弹出回测已结束的提示性窗口
 
     def _display_recommandation(self):  # 用这个函数触发GUI界面的评价显示
+
         self.strategy_return.Clear()
         strategy_return = self.context.recommand_index.calculate_strategy_returns()
+        strategy_return = round(strategy_return, 4)   # 只保留4位小数
         self.strategy_return.SetValue(str(strategy_return * 100) + '%')
 
         self.benchmark_return.Clear()
         benchmark_return = self.context.recommand_index.calculate_benchmark_returns()
+        benchmark_return = round(benchmark_return, 4)
         self.benchmark_return.SetValue(str(benchmark_return * 100) + '%')
 
         self.alpha.Clear()
         alpha = self.context.recommand_index.calculate_alpha()
+        alpha = round(alpha, 4)
         self.alpha.SetValue(str(alpha))
 
         self.beta.Clear()
         beta = self.context.recommand_index.calculate_beta()
+        beta = round(beta, 4)
         self.beta.SetValue(str(beta))
 
         self.sharpe.Clear()
         sharpe_ratio = self.context.recommand_index.calculate_sharpe_ratio()
+        sharpe_ratio = round(sharpe_ratio, 4)
         self.sharpe.SetValue(str(sharpe_ratio))
 
         self.max_drawdown.Clear()
         max_drowdown = self.context.recommand_index.calculate_max_drawdown()
+        max_drowdown = round(max_drowdown, 4)
         self.max_drawdown.SetValue(str(max_drowdown * 100) + '%')
 
     def execute(self, event):  # 定义当点击开始回测按钮后的 执行函数
@@ -283,13 +302,14 @@ class BacktestFrame(wx.Frame):
         # 从这里开始后要分成两个线程执行了，尝试用队列的方法进行两个线程中的通信，一个是主线程，一个是子线程
         update_queue = mp.Queue()  # 创建一个队列用于进程间的通信
         end_event = mp.Event()  # 创建一个事件对象
-        strategy_process = mp.Process(target=context.execute_strategy, args=(update_queue,))  # 用这个创建一个新的进程
+        # strategy_process = mp.Process(target=context.execute_strategy, args=(update_queue,))  # 这里好像不能用进程，不然上下文会丢失
         # plot_process = mp.Process(target=self.on_update_data, args=(update_queue, end_event,))
-
-        strategy_process.start()  # 启动这个进程
+        strategy_thread = threading.Thread(target=context.execute_strategy, args=(update_queue,))
+        # strategy_process.start()  # 启动这个进程
+        strategy_thread.start()     # 启动这个线程
         update_date_task_thread = threading.Thread(target=self.on_update_data, args=(update_queue, end_event,))
         update_date_task_thread.start()  # 启动这个耗时的线程
-        wx.CallLater(100, self._check_process, strategy_process, end_event)  # 每100毫秒检查一次进程是否结束，这个函数一般用来定期检查
+        wx.CallLater(100, self._check_process, strategy_thread, end_event)  # 每100毫秒检查一次进程是否结束，这个函数一般用来定期检查
 
 
 ##
