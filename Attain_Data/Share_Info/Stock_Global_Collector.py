@@ -4,12 +4,13 @@ Created on Mon Apr 24 22:55:55 2023
 
 @author: Administrator
 """
+##
 import akshare as ak
 
 # %%
 __all__ = ['Stock_Global_Collector']
 
-
+##
 # %%
 # 这个程序专门用于获得股票指数的数据
 class Stock_Global_Collector():
@@ -38,9 +39,16 @@ class Stock_Global_Collector():
         self.current_datas = df
         return df
 
-    def get_index_data(self, symbol="sz399552"):  # 获取指数的日K数据
-        df = ak.stock_zh_index_daily(symbol=symbol)
+    def get_index_data(self, symbol="sz399552"):  # 获取指数一段时间的日K数据,从它的上市到当前
+        df = ak.stock_zh_index_daily(symbol=symbol)  # 这个函数只有symbol这么一个参数
         self.index_data = df
+        return df
+
+    def get_index_data_period(self, symbol='000300', period='daily', start_date="20220101",
+                              end_date="20230421"):  # 获取指数一段时间的日K数据
+        df = ak.index_zh_a_hist(symbol=symbol, period=period, start_date=start_date, end_date=end_date)
+        self.index_data = df
+        return df
 
     def get_us_current_datas(self):  # 获取美股的实时行情
         df = ak.stock_us_spot_em()

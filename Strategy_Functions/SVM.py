@@ -5,25 +5,18 @@ Base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(Base_dir)
 
 from Attain_Data.Share_Info import *  # 导入数据获取方法
-from Trade_System.Class_Base import *  # 导入交易相关的类
+from Trade_System.Class_Base.Context import *
+from utils.file_handing import *
 import datetime
 
-__all__ = ['class_init', 'initialize', 'handle_data', 'on_event', 'before_trading_start', 'after_trading_end',
+__all__ = ['initialize', 'handle_data', 'on_event', 'before_trading_start', 'after_trading_end',
            'on_strategy_end', 'process_initialize', 'after_code_change', 'unschedule_all', 'serialize_g',
            'signal_handler']
 
 '在这里说明这是一个什么样的策略，它的实现思路是怎样的。'
 
-def class_init(strategy, cash=100000, start_date='20220101', end_date='20230503', freq="day"):
-    # 更新交易数据表
-    # sic = Stock_Info_Collector()   # 必要时再更新交易日表
-    # sic.get_trade_date()  # 更新交易日表,到今年的最后一天为止
-    context = Context(cash, start_date, end_date, freq=freq, strategy=strategy)
 
-    return context
-
-
-# %%
+##
 def initialize(context: Context):  # 初始化函数
     cash = context.cash
     context.portfolio.create_new_SubPortfolio(inout_cash=cash, margin=1, type='stock', name="我的股票账户1")  # 创建一个子账户
@@ -31,22 +24,21 @@ def initialize(context: Context):  # 初始化函数
     pass
 
 
-def handle_data(context: Context, date):  # 运行策略
+def handle_data(context: Context):  # 运行策略
     pass
 
 
-def on_event():  # 事件回调函数
+def on_event(context: Context):  # 事件回调函数
     pass
 
 
-def before_trading_start(context: Context, date):  # 开盘前运行的策略代码
+def before_trading_start(context: Context):  # 开盘前运行的策略代码
     # 这里需要在每个交易日开盘前对账户的一些有关于时间的参数做一个新的设定
 
-
     pass
 
 
-def after_trading_end(context: Context, date):  # 收盘后运行策略
+def after_trading_end(context: Context):  # 收盘后运行策略
     pass
 
 

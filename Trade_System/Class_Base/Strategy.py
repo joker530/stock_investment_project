@@ -9,7 +9,7 @@ import os
 Base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(Base_dir)
 
-from Trade_System.Class_Base.Pickle import *
+from utils.file_handing import *
 from Trade_System.Class_Base.Context import *
 
 __all__ = ['Strategy']
@@ -35,7 +35,7 @@ class Strategy:
         self.after_code_change = after_code_change
         self.unschedule_all = unschedule_all
 
-    def _get_benchmark_returns(self, context):  # 用这个函数专门得到基准在回测区间的日收益率序列
+    def _get_benchmark_returns(self, context:Context):  # 用这个函数专门得到基准在回测区间的日收益率序列
         start_date = context.date_range[0].replace('-', '')
         end_date = context.date_range[-1].replace('-', '')
         benchmark_code = context.benchmark.split()[1]  # 获取基准的代码，如"sh000300"
@@ -45,15 +45,16 @@ class Strategy:
         pass
 
     def execute(self, context: Context, update_queue: Queue):  # 策略的执行函数, 这个队列用于进程中的通信
-        self.initialize(context)  #
+        self.initialize(context)  # 在这里对一些参数进行设置
         last_return = 0  # 用这个变量记录前一个交易日回测下的历史收益率
         # 这里在开始回测之前，直接获取benchmark在start_date到end_date的数据
         for date in context.date_range:
             context.dt = datetime.strptime(date, '%Y-%m-%d').date()  # 每次变化时间，最后的格式类似datetime.date(1990, 1, 1)
-            context.portfolio.current_trade_date = context.dt
-            self.before_trading_start(context, date)
-            self.handle_data(context, date)
-            self.after_trading_end(context, date)
+            context.beginning_of_trading_date(date)  # 更新这个对象内部的当前时间
+            # context.portfolio.current_trade_date = context.dt   #  这里要修改
+            self.before_trading_start(context)   # 注意这里必须只有一个context参数，其他的有也给我挤到context对象中
+            self.handle_data(context)
+            self.after_trading_end(context)
             # 这里还需要有一个获取当天的收盘价，更新仓位和账户价值信息的一个操作。
             # 这里操作策略
             new_return = context.portfolio.returns  # 每天获取当前回测下的历史收益率

@@ -5,8 +5,10 @@ Created on Wed Apr  5 09:11:35 2023
 @author: Administrator
 """
 import sys
+import os
+Base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(Base_dir)
 
-sys.path.append('D:/量化投资/交易框架的编写/backtesting_platform')
 from datetime import datetime, timedelta
 from Trade_System.Class_Base.Context import *
 from Trade_System.Class_Base.G import *

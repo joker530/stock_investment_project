@@ -12,7 +12,9 @@ sys.path.append(Base_dir)
 ##
 from Trade_System.Class_Base.Portfolio import *  # 导入总账户类
 from Trade_System.Class_Base.RecommandIndex import *  # 导入策略评价类
-from Trade_System.Class_Base.Pickle import *  # 导入压缩方法
+from Attain_Data.Share_Info.Stock_Global_Collector import *  # 导入指数数据获取对象
+from utils.file_handing import *  # 导入文件处理工具
+from utils.date_handing import *  # 导入日期格式处理工具
 
 ##
 __all__ = ["Context"]
@@ -21,13 +23,14 @@ __all__ = ["Context"]
 # %% 上下文数据，定义了一个Context类和一个初始化的方法，主要存放具体笼统的信息
 # context 对象主要用于管理回测参数和状态信息，例如设置股票池、回测时间范围等。
 class Context:
-    def __init__(self, cash, start_date, end_date, strategy, kind='backtest', freq='day', benchmark=None):
+    def __init__(self, cash, start_date: datetime, end_date: datetime, strategy,
+                 kind='backtest', freq='daily', benchmark=None):
         # 总投入金额
         self.cash = cash
         # 开始时间
-        self.start_date = start_date.strftime('%Y-%m-%d')  # 转换为字符串的形式
+        self.start_date = dd_to_long_datestr(start_date)  # 转换为字符串的形式
         # 结束时间
-        self.end_date = end_date.strftime('%Y-%m-%d')
+        self.end_date = dd_to_long_datestr(end_date)
         # 运行的策略
         self._strategy = strategy
         # 持仓标的信息
@@ -38,18 +41,13 @@ class Context:
         self.universe = None
         # 运行方式，一共有三种，分别是backtest、simtrade和livetrade，也就是回测、模拟交易和实时交易
         self.type = kind
-        # 运行频率，一共有三种可选，分别是day、minute和tick
+        # 运行频率，一共有三种可选，分别是daily、weekly和mouthly
         self.freq = freq
         # 筛出在信息表中的日期
-        trade_cal = pd.read_csv("D:/量化投资/交易框架的编写/trade_cal.csv")  # 读取这个数据表
-        self.date_range = trade_cal[(trade_cal['trade_date'] >= str(self.start_date)) &
-                                    (trade_cal['trade_date'] <= str(self.end_date))]['trade_date'].values
-        # self.date_range = trade_cal[(trade_cal['is_open'] == 1) &
-        # (trade_cal['cal_date'] >= str(self.start_date)) &
-        # (trade_cal['cal_date'] <= str(self.end_date))]['cal_date'].values
-        # 表示当前交易进行到的当前时间
-        # 类似与datetime.datetime(2024, 6, 10, 0, 0)这种格式，在回测框架的层面上进行递增
-        self.dt = dateutil.parser.parse(str(start_date))
+        trade_cal = pd.read_csv(Base_dir + '/Datasets/Data_Table/Trading_Timetable/' + 'stock_trade_cal.csv')  # 读取这个数据表
+        self.date_range = get_date_range_ndarray(trade_cal_csv=trade_cal, start_date=self.start_date,
+                                                 end_date=self.end_date)
+
         # 设置总账户，作为总体信息的一个总和，底下是子账户，所以要统计底下的子账户信息
         self.portfolio = Portfolio(self.cash)
         # 把外围类对象作为参数传递给内部类对象是合法的，传参进去该怎么样怎么样
@@ -66,6 +64,30 @@ class Context:
         # 将天数转换为年
         years_span = delta.days / 365.25  # 考虑闰年的影响，平均一年约为365.25天
         return years_span
+
+    def benchmark_calculation(self):  # 用这个函数计算基准在一段时间的序列，并返回序列数据
+        if self.benchmark is None:
+            raise TypeError("请在策略文件中设置基准后再进行基准计算!")
+        else:
+            keys = list(self.benchmark.keys())
+            values = list(self.benchmark.values())
+            sgc = Stock_Global_Collector()
+            start_date = long_to_short_datestr(self.start_date)
+            end_date = long_to_short_datestr(self.end_date)
+            final_series = [0] * len(self.date_range)
+            for i in range(self.benchmark):
+                temp_series = list(sgc.get_index_data_period(symbol=keys[i], period=self.freq, start_date=start_date,
+                                                             end_date=end_date)["收盘"] * values[i])
+                final_series += list(map(lambda a, b: a + b, temp_series, final_series))
+            return final_series
+
+    def beginning_of_trading_date(self, date):     # 需要在每个交易日执行之前调用一次，更新一下上下文的数据
+        self.dt = long_datestr_to_dd(str(date))    # datetime.datetime这种格式，在回测框架的层面上进行递增,代表交易进行到的时间
+        self.portfolio.update_date_info(date=date)
+
+    def ending_of_trading_date(self):
+        # 需要在每个交易日结束并进行结算前调用一次
+        self.portfolio.update_price_info()
 
     def execute_strategy(self, update_queue):
         self._strategy.execute(self, update_queue)  # 执行该策略类中的执行函数， 并把Context作为参数传进去

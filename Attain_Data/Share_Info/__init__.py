@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 
+import os
 import sys
-sys.path.append('D:/量化投资/交易框架的编写/backtesting_platform')
 
-from Attain_Data.Share_Info.Stock_Datas_Operator import *
-from Attain_Data.Share_Info.Stock_Info_Collector import *
-from Attain_Data.Share_Info.Stock_Global_Collector import *
-from Attain_Data.Share_Info.Stock_Category_Collector import *
+current_directory = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_directory)  # 将当前文件夹添加到搜索路径
+
+from Stock_Datas_Operator import *
+from Stock_Info_Collector import *
+from Stock_Global_Collector import *
+from Stock_Category_Collector import *
