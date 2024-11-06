@@ -87,13 +87,13 @@ class Context:
                         final_dict[key] = value
             return final_dict
 
-    def execute_strategy(self, update_queue):
+    def execute_strategy(self, update_queue, update_sp_queue):
         self.portfolio.create_new_SubPortfolio(mother_cash=self.portfolio.remaining_recharge, name="account1")
         # 创建一个子账户
         self.benchmark_dict = self.benchmark_calculation()
         self.years_span = self.calculate_years_between_dates()
 
-        self._strategy.execute(self, update_queue)  # 执行该策略类中的执行函数， 并把Context作为参数传进去
+        self._strategy.execute(self, update_queue, update_sp_queue)  # 执行该策略类中的执行函数， 并把Context作为参数传进去
         self.benchmark_returns = get_series_changes_series(self.benchmark_returns)
 
         self.recommand_index = RecommendIndex(strategy_returns=self.returns, benchmark_returns=self.benchmark_returns,

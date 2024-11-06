@@ -1,5 +1,6 @@
-##
+# 这个文件定义了一个回测框架以及它的启动方式
 import datetime
+import time
 
 import wx
 import matplotlib.pyplot as plt
@@ -18,34 +19,23 @@ sys.path.append(Base_dir)
 sys.path.append(Base_dir + '/Strategy_Functions')  # 用于导入具体策略的存放路径
 
 from Trade_System.Class_Base.Strategy import *  # 导入策略类用于生成策略对象
-import importlib
 import threading  # 用这个模块创建线程
 from Trade_System.Class_Base.Context import *
-
-# from Trade_System.Class_Base.G import *  # 导入对象G
+from utils.file_handing import *
+from GUI.SubportfolioFrame import *
 
 # 设置显示中文字体和正负数显示
 mpl.rcParams["font.sans-serif"] = ["SimHei"]
 plt.rcParams['axes.unicode_minus'] = False
 
 ##
-__all__ = ["BacktestFrame", "MyApp"]
-
-
-def dynamic_import(module_name):  # 这个函数用来动态的导入模块,在使用这个函数之前请确认对应的库是否已经添加到路径
-    try:
-        module = importlib.import_module(name=module_name)  # 其中package是最小父文件
-        return module
-    except ImportError as e:
-        print(f"导入模块 {module_name} 失败: {e}")
-        return None
-
+__all__ = ["BacktestFrame", "BacktestApp"]
 
 ##
 class BacktestFrame(wx.Frame):
     def __init__(self, *args, **kw):
         super(BacktestFrame, self).__init__(*args, **kw)
-
+        self.SubfortfoiloFrame = None
         self.context = None
         panel = wx.Panel(self)
 
@@ -58,11 +48,11 @@ class BacktestFrame(wx.Frame):
         self.compile_button = wx.Button(panel, label="编译运行")
         hbox1.Add(self.compile_button, flag=wx.RIGHT, border=8)
 
-        self.start_date = wx.TextCtrl(panel, value='20240101')  # 用value这个参数设置初始值
+        self.start_date = wx.TextCtrl(panel, value='20230101')  # 用value这个参数设置初始值
         hbox1.Add(wx.StaticText(panel, label="开始日期"), flag=wx.RIGHT, border=5)
         hbox1.Add(self.start_date, flag=wx.RIGHT, border=5)
 
-        self.end_date = wx.TextCtrl(panel, value='20240201')
+        self.end_date = wx.TextCtrl(panel, value='20240101')
         hbox1.Add(wx.StaticText(panel, label="至"), flag=wx.RIGHT, border=5)
         hbox1.Add(self.end_date, flag=wx.RIGHT, border=5)
 
@@ -159,10 +149,9 @@ class BacktestFrame(wx.Frame):
         self.line, = self.ax.plot(x, y, label="Mainline")
         self.benchmark_line, = self.ax.plot([], [], label='Benchmark')  # 初始化基准线
         self.ax.legend()
-        self.ax.set_title('更新后的函数图像')
         self.ax.set_title('回测图像', fontproperties=self.font)
-        self.ax.set_xlabel('X轴', fontproperties=self.font)
-        self.ax.set_ylabel('Y轴', fontproperties=self.font)
+        self.ax.set_xlabel('日期', fontproperties=self.font)
+        self.ax.set_ylabel('收益率', fontproperties=self.font)
         self.canvas.draw()  # 重新绘制图表
         pass
 
@@ -175,7 +164,7 @@ class BacktestFrame(wx.Frame):
         is_plot = True  # 当这个变量为False的时候才能触发绘图
         while not end_event.is_set():
             if not update_queue.empty():
-                date, rt, brt = update_queue.get()  # 这个不是pop，队列中的元素也会被取出,对获取的二元元组进行解包处理
+                date, rt, brt = update_queue.get()  # 这个不是pop，队列中的元素也会被取出,对获取的二元元组进行解包处理,一次只能取出一个
                 dates.append(date)
                 returns.append(rt)
                 # print(returns)
@@ -249,7 +238,7 @@ class BacktestFrame(wx.Frame):
         else:
             end_event.set()
             # 这里还要触发回撤策略评价显示,把它放到主线程中执行
-            wx.CallAfter(self._display_recommandation)   # 这个不应该放这里的
+            wx.CallAfter(self._display_recommandation)     # GUI界面的更新要放在主线程中执行，这个一定要注意
             wx.MessageBox('回测已结束', '提示', wx.OK | wx.ICON_INFORMATION)  # 弹出回测已结束的提示性窗口
 
     def _display_recommandation(self):  # 用这个函数触发GUI界面的评价显示
@@ -299,28 +288,38 @@ class BacktestFrame(wx.Frame):
         context = Context(strategy=strategy, cash=mother_money, start_date=start_date, end_date=end_date,
                           freq=frequency, benchmark=benchmark)  # 此时这个上下文会自动生成一个总账户
         self.context = context
-        # 从这里开始后要分成两个线程执行了，尝试用队列的方法进行两个线程中的通信，一个是主线程，一个是子线程
-        update_queue = mp.Queue()  # 创建一个队列用于进程间的通信
-        end_event = mp.Event()  # 创建一个事件对象
-        # strategy_process = mp.Process(target=context.execute_strategy, args=(update_queue,))  # 这里好像不能用进程，不然上下文会丢失
-        # plot_process = mp.Process(target=self.on_update_data, args=(update_queue, end_event,))
-        strategy_thread = threading.Thread(target=context.execute_strategy, args=(update_queue,))
-        # strategy_process.start()  # 启动这个进程
+
+        # 从这里开始后要分成两个线程执行了，尝试用队列的方法进行两个线程中的通信，一个是主线程，两个是子线程
+        update_queue = mp.Queue()     # 创建一个队列用于策略线程与绘图线程间的通信
+        update_sp_queue = mp.Queue()  # 创建一个队列用于策略线程与子账户展示线程间的通信
+
+        end_event = mp.Event()        # 创建一个事件对象，用来标记策略线程是否结束
+
+        strategy_thread = threading.Thread(target=context.execute_strategy, args=(update_queue, update_sp_queue,))
         strategy_thread.start()     # 启动这个线程
+        time.sleep(0.3)             # 先让这个数据生成的进程运行一会
+
         update_date_task_thread = threading.Thread(target=self.on_update_data, args=(update_queue, end_event,))
         update_date_task_thread.start()  # 启动这个耗时的线程
+
+        sp = self.context.portfolio.Subportfolios[0]
+        update_sp_task_thread = threading.Thread(target=self.SubfortfoiloFrame.backtest_start, args=(sp, update_sp_queue, end_event, start_date, end_date))
+        update_sp_task_thread.start()    # 启动这个子账户同步展示线程
+
         wx.CallLater(100, self._check_process, strategy_thread, end_event)  # 每100毫秒检查一次进程是否结束，这个函数一般用来定期检查
 
 
 ##
-class MyApp(wx.App):
+class BacktestApp(wx.App):
     def OnInit(self):
-        frame = BacktestFrame(None)
-
-        frame.Show(True)
+        frame1 = BacktestFrame(None)
+        frame1.Show(True)
+        frame2 = SubfortfoiloFrame(None)
+        frame2.Show(True)
+        frame1.SubfortfoiloFrame = frame2
         return True
 
 
 if __name__ == '__main__':
-    app = MyApp()  # 这句语句会调用OnInit方法
+    app = BacktestApp()  # 这句语句会调用OnInit方法
     app.MainLoop()

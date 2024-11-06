@@ -24,6 +24,7 @@ class Position:
 
         self.quantity = quantity    # 标的数量
         self.average_cost = price   # 标的的平均成本
+        self.close_price = price    # 先初始定义为买入价，后面会有函数进行更新
 
         self.market_value = quantity * price                                 # 在做空时，市场价值为负数
         self.tied_up_capital = self.market_value                             # 标的的占用资金，包括仓位和下单占用资金
@@ -33,7 +34,7 @@ class Position:
         self.dt = self.master.dt
 
 
-        if master.Trading_rules != "plus_zero":                          # 如果不是T+0交易制度
+        if master.Trading_rules != "plus_zero":                              # 如果不是T+0交易制度
             self.unlocked_sell_quantity = 0                                  # 锁定这一天买的所有股票，不能卖出
         else:
             self.unlocked_sell_quantity = quantity                           # 在任何时候都不进行锁定，可以任意卖出
@@ -88,6 +89,7 @@ class Position:
         self.market_value = self.quantity * close_price        # 在做空时，quantity一般为负数
         self.tied_up_capital = self.quantity * close_price     # 标的的占用资金，包括仓位和下单占用资金
         self.position_profit = -self.average_cost * abs(self.quantity) + self.market_value  # 用这个来记录仓位盈亏的金额
+        self.close_price = close_price
 
     @property
     def value(self):  # 输出现有持仓外加挂单的总价值

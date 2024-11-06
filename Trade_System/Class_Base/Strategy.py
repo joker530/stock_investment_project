@@ -45,7 +45,11 @@ class Strategy:
         # 需要在每个交易日结束并进行结算前调用一次
         self.master.portfolio.update_price_info()
 
-    def _data_interaction_processing(self, update_queue: Queue, date: str):
+    def _data_interaction_processing(self, update_queue: Queue, update_sp_queue: Queue, date: str):
+        self._data_interaction_to_BacktestFrame(update_queue=update_queue, date=date)
+        self._data_interaction_to_SubportfolioFrame(update_sp_queue=update_sp_queue, date=date)
+
+    def _data_interaction_to_BacktestFrame(self, update_queue: Queue, date: str):        # 这里定义与回测界面进行数据交互的函数
         # 使用这个函数在每个交易日结束后进行必要的数据交互处理
 
         # 这里操作策略
@@ -55,14 +59,29 @@ class Strategy:
         new_return = np.prod(new_seq)  # 每天获取当前回测下的总收益率
 
         # 这里操作基准
-        new_benchmark_return = ((self.master.benchmark_dict[date] - self.master.benchmark_dict[self.master.date_range[0]])
+        new_benchmark_return = ((self.master.benchmark_dict[date] - self.master.benchmark_dict[
+            self.master.date_range[0]])
                                 / self.master.benchmark_dict[self.master.date_range[0]]) + 1
         self.master.benchmark_returns.append(new_benchmark_return)
 
         # 将新元素放入队列，这里放入的是收益率，还要再放入一个日期的,一次只放入一个
         update_queue.put((date, new_return, new_benchmark_return))
 
-    def execute(self, context: Context, update_queue: Queue):  # 策略的执行函数, 这个队列用于进程中的通信
+    def _data_interaction_to_SubportfolioFrame(self, update_sp_queue, date):    # 这里定义与子账户进行数据交互的函数
+        sp = self.master.portfolio.Subportfolios[0]
+        sp_text_data_list = [sp.name, sp.inout_cash, sp.available_cash,
+                             sp.transferable_cash, sp.positions_value, dd_to_long_datestr(sp.dt),
+                             sp.total_value, sp.net_value, sp.total_liability]
+
+        new_sp_net_value = sp.net_value
+        positions_info_list = list()
+        for position in sp.positions.values():
+            positions_info_list.append((position.code, position.quantity, position.close_price,
+                                        position.average_cost, position.market_value))
+
+        update_sp_queue.put((date, sp_text_data_list, new_sp_net_value, positions_info_list))    # 以元组的形式进行导入
+
+    def execute(self, context: Context, update_queue: Queue, update_sp_queue: Queue):  # 策略的执行函数, 这个队列用于进程中的通信
         self.master = context
         self.initialize(self.master)
         # 在这里对一些参数进行设置
@@ -75,7 +94,7 @@ class Strategy:
             self._ending_of_trading_date()         # 获取所有仓位当天的收盘价，更新仓位和账户价值信息的一个操作。
             self.after_trading_end(self.master)
 
-            self._data_interaction_processing(update_queue=update_queue, date=date)
+            self._data_interaction_processing(update_queue=update_queue, update_sp_queue=update_sp_queue, date=date)
             time.sleep(0.1)
 
         self.on_strategy_end(self.master)

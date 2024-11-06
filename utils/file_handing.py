@@ -2,11 +2,12 @@
 import os
 import sys
 import pickle
+import importlib
 
 Base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(Base_dir)
 ##
-__all__ = ["is_file_here", "dump_class", "load_class"]
+__all__ = ["is_file_here", "dump_class", "load_class", "dynamic_import"]
 
 
 def is_file_here(filepath):
@@ -32,3 +33,13 @@ def load_class(filename: str):
     with open(location, "rb") as f:
         var = pickle.load(f)
     return var
+
+
+def dynamic_import(module_name):
+    # 这个函数用来动态的导入模块,在使用这个函数之前请确认对应的库是否已经添加到路径
+    try:
+        module = importlib.import_module(name=module_name)  # 其中package是最小父文件
+        return module
+    except ImportError as e:
+        print(f"导入模块 {module_name} 失败: {e}")
+        return None
